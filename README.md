@@ -2,8 +2,8 @@
 
 Готовый шаблон для:
 - multi-arch сборки образа (`linux/amd64`, `linux/arm64`);
-- публикации образа в Docker Hub;
-- запуска **двух контейнеров** OpenClaw Gateway на портах `10000` и `20000`.
+- запуска **двух контейнеров** OpenClaw Gateway на портах `10000` и `20000`;
+- локального теста через `docker compose` на платформе `linux/amd64`.
 
 ## Что в репозитории
 
@@ -28,9 +28,9 @@ make build \
   OPENCLAW_GATEWAY_VERSION=v1.0.0
 ```
 
-## 3) Публикация multi-arch в Docker Hub
+## 3) Публикация multi-arch в registry
 
-Перед этим войдите в Docker Hub:
+Перед этим войдите в нужный registry:
 
 ```bash
 docker login
@@ -40,8 +40,8 @@ docker login
 
 ```bash
 make push \
-  DOCKER_IMAGE=docker.io/<your_user>/openclaw-gateway \
-  DOCKER_TAG=v1.0.0 \
+  DOCKER_IMAGE=ghcr.io/openclaw/openclaw \
+  DOCKER_TAG=latest \
   OPENCLAW_GATEWAY_VERSION=v1.0.0
 ```
 
@@ -50,9 +50,10 @@ make push \
 ## 4) Запуск 2 контейнеров (10000 и 20000)
 
 ```bash
+make pull DOCKER_PLATFORM=linux/amd64
+
 make up \
-  DOCKER_IMAGE=docker.io/<your_user>/openclaw-gateway \
-  DOCKER_TAG=v1.0.0
+  DOCKER_PLATFORM=linux/amd64
 ```
 
 Проверка:
@@ -73,16 +74,16 @@ make logs
 make down
 ```
 
-## Используемая стабильная версия
+## Образ и версия по умолчанию
 
-По умолчанию используется `v1.0.0` (параметры `DOCKER_TAG` и `OPENCLAW_GATEWAY_VERSION`).
-При необходимости укажите другой стабильный тег релиза.
+- По умолчанию используется образ `ghcr.io/openclaw/openclaw:latest` (`DOCKER_IMAGE` + `DOCKER_TAG` из `Makefile`).
+- При необходимости можно передать другой `DOCKER_TAG` или `DOCKER_IMAGE` в `make up`/`make pull`.
 
-## Примечания для Orange Pi
+## Примечания по платформе
 
-- Для Orange Pi обычно нужна платформа `linux/arm64`.
-- При использовании `make push` манифест будет включать сразу `linux/amd64` и `linux/arm64`.
-- На Orange Pi достаточно выполнить `make up` с тем же `DOCKER_IMAGE` и `DOCKER_TAG`.
+- Для локального запуска и теста используйте только `DOCKER_PLATFORM=linux/amd64`.
+- В `docker-compose.yml` платформа берется из переменной `DOCKER_PLATFORM`.
+- Для buildx-сборки `make push` сохраняется multi-arch (`linux/amd64,linux/arm64`).
 
 ## Git workflow (отдельная ветка)
 

@@ -1,7 +1,8 @@
 SHELL := /bin/bash
 
-DOCKER_IMAGE ?= docker.io/your_dockerhub_user/openclaw-gateway
-DOCKER_TAG ?= v1.0.0
+DOCKER_IMAGE ?= ghcr.io/openclaw/openclaw
+DOCKER_TAG ?= latest
+DOCKER_PLATFORM ?= linux/amd64
 PLATFORMS ?= linux/amd64,linux/arm64
 OPENCLAW_GATEWAY_VERSION ?= v1.0.0
 RELEASE_BASE_URL ?= https://github.com/openclaw/openclaw-gateway/releases/download
@@ -35,10 +36,10 @@ push: buildx-init
 		.
 
 pull:
-	DOCKER_IMAGE=$(DOCKER_IMAGE) DOCKER_TAG=$(DOCKER_TAG) docker compose pull
+	DOCKER_IMAGE=$(DOCKER_IMAGE) DOCKER_TAG=$(DOCKER_TAG) DOCKER_PLATFORM=$(DOCKER_PLATFORM) docker compose pull
 
 up:
-	DOCKER_IMAGE=$(DOCKER_IMAGE) DOCKER_TAG=$(DOCKER_TAG) docker compose up -d
+	DOCKER_IMAGE=$(DOCKER_IMAGE) DOCKER_TAG=$(DOCKER_TAG) DOCKER_PLATFORM=$(DOCKER_PLATFORM) docker compose up -d
 
 down:
 	docker compose down

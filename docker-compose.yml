@@ -2,7 +2,8 @@ version: "3.9"
 
 services:
   gateway-10000:
-    image: ${DOCKER_IMAGE:-docker.io/your_dockerhub_user/openclaw-gateway}:${DOCKER_TAG:-v1.0.0}
+    image: ${DOCKER_IMAGE:-ghcr.io/openclaw/openclaw}:${DOCKER_TAG:-latest}
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     container_name: openclaw-gateway-10000
     restart: unless-stopped
     environment:
@@ -13,7 +14,8 @@ services:
       - "10000:8080"
 
   gateway-20000:
-    image: ${DOCKER_IMAGE:-docker.io/your_dockerhub_user/openclaw-gateway}:${DOCKER_TAG:-v1.0.0}
+    image: ${DOCKER_IMAGE:-ghcr.io/openclaw/openclaw}:${DOCKER_TAG:-latest}
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     container_name: openclaw-gateway-20000
     restart: unless-stopped
     environment:
