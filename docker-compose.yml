@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  gateway-10000:
+    image: ${DOCKER_IMAGE:-docker.io/your_dockerhub_user/openclaw-gateway}:${DOCKER_TAG:-v1.0.0}
+    container_name: openclaw-gateway-10000
+    restart: unless-stopped
+    environment:
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: 8080
+      OPENCLAW_INSTANCE: gateway-10000
+    ports:
+      - "10000:8080"
+
+  gateway-20000:
+    image: ${DOCKER_IMAGE:-docker.io/your_dockerhub_user/openclaw-gateway}:${DOCKER_TAG:-v1.0.0}
+    container_name: openclaw-gateway-20000
+    restart: unless-stopped
+    environment:
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: 8080
+      OPENCLAW_INSTANCE: gateway-20000
+    ports:
+      - "20000:8080"
