@@ -1,165 +1,81 @@
-# OpenClaw Gateway через WSS (TLS) без публикации backend-портов
+# Инструкция по запуску OpenClaw Gateway
 
-Реализован вариант A (предпочтительный): отдельные сабдомены под каждый gateway.
+Ниже — пошаговый сценарий, который оставляет только необходимые команды и объясняет, в каком порядке их выполнять.
 
-- `wss://gw10000.example.com` -> `gateway-10000:18789` (внутри Docker-сети)
-- `wss://gw20000.example.com` -> `gateway-20000:18789` (внутри Docker-сети)
+## 1. Подключение к устройству OPI
 
-В интернет публикуется только reverse-proxy (`80/443`). Порты backend `10000/20000` не публикуются вообще.
-
-## Файлы
-
-- `docker-compose.yml` - два gateway + Caddy reverse proxy
-- `Caddyfile` - TLS (Let's Encrypt), WSS proxy, IP allowlist
-
-## 1) Подготовка переменных (обязательно)
-
-Создайте `.env` рядом с `docker-compose.yml`:
+Подключитесь по SSH к хосту `opi`:
 
 ```bash
-cat > .env <<'EOF'
-DOCKER_IMAGE=ghcr.io/openclaw/openclaw
-DOCKER_TAG=latest
-DOCKER_PLATFORM=linux/amd64
-
-ACME_EMAIL=admin@example.com
-ACME_CA=https://acme-v02.api.letsencrypt.org/directory
-DOMAIN_GW10000=gw10000.example.com
-DOMAIN_GW20000=gw20000.example.com
-
-# Один IP или CIDR, например: 203.0.113.10/32
-ALLOW_IPS=203.0.113.10/32
-
-# ОБЯЗАТЕЛЬНО: сильный токен
-OPENCLAW_GATEWAY_TOKEN=REPLACE_ME
-EOF
+ssh opi
 ```
 
-`ACME_EMAIL` должен быть реальным адресом (не `example.com`), иначе CA отклонит регистрацию ACME account.
+После подключения все последующие команды из раздела 2 выполняются уже на устройстве `opi`.
 
-Сгенерировать безопасный токен:
+## 2. Клонирование репозитория и подготовка контейнера
+
+Склонируйте основной репозиторий OpenClaw:
 
 ```bash
-openssl rand -hex 32
+git clone https://github.com/openclaw/openclaw.git
 ```
 
-Вставьте результат в `OPENCLAW_GATEWAY_TOKEN`. Пустое значение не пройдет: compose остановится с ошибкой.
-
-## 2) DNS
-
-Нужны записи:
-
-- `A` (и/или `AAAA`) для `gw10000.example.com` -> публичный IP вашего хоста
-- `A` (и/или `AAAA`) для `gw20000.example.com` -> публичный IP вашего хоста
-
-Важно: домены должны уже резолвиться на сервер до первого старта Caddy, иначе Let's Encrypt не выдаст сертификат.
-
-## 3) Запуск
+Перейдите в директорию проекта (если нужно):
 
 ```bash
-docker compose up -d
-docker compose ps
+cd openclaw
 ```
 
-Проверка TLS handshake:
+Запустите скрипт настройки Docker с указанием образа:
 
 ```bash
-curl -vk https://gw10000.example.com
-curl -vk https://gw20000.example.com
+OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw ./docker-setup.sh
 ```
 
-## 4) Подключение клиента
+Эта команда поднимет необходимое окружение для `openclaw-gateway`.
 
-Используйте только доменные WSS URL:
+## 3. Подключение через jump-host и проброс порта
 
-- `wss://gw10000.example.com`
-- `wss://gw20000.example.com`
-
-Не используйте `0.0.0.0` в URL.
-
-## 5) Проверка, что backend не торчит в интернет
-
-На сервере:
+С локальной машины откройте SSH-сессию через `vps` на `opi` с пробросом локального порта `18789`:
 
 ```bash
-docker compose ps
-ss -tulpen | grep -E '(:10000|:20000|:443|:80)\b'
+ssh -J vps opi -L 18789:127.0.0.1:18789
 ```
 
-Ожидаемо: слушают только `:80` и `:443` (reverse proxy). Портов `10000/20000` на хосте быть не должно.
+Это нужно для доступа к сервису на `opi` через локальный порт.
 
-Из внешней сети (другой хост/интернет):
+## 4. Работа с устройствами внутри контейнера gateway
+
+Далее команды выполняются на хосте, где запущен Docker с контейнером `openclaw-openclaw-gateway-1`.
+
+### 4.1. Показать список устройств
 
 ```bash
-nc -vz <your_server_ip> 10000
-nc -vz <your_server_ip> 20000
+docker exec -it openclaw-openclaw-gateway-1 node dist/index.js devices list
 ```
 
-Ожидаемо: `failed`/`timed out`.
+### 4.2. Подтвердить pairing для Telegram
 
-## 6) Ограничение доступа и anti-abuse
-
-Уже включено в `Caddyfile`:
-
-- IP allowlist через `remote_ip` matcher (`ALLOW_IPS`)
-
-По rate limit:
-
-- в стандартном Caddy нет встроенного rate-limit без доп. модуля;
-- для простого копипаста рекомендуется держать allowlist + firewall/cloud edge rate limit.
-- пример на хосте с UFW:
+Вместо `XXXX` подставьте нужный код/идентификатор pairing:
 
 ```bash
-sudo ufw limit 443/tcp
+docker exec -it openclaw-openclaw-gateway-1 node dist/index.js pairing approve telegram XXXX
 ```
 
-## 7) Troubleshooting TLS error
+### 4.3. Одобрить устройство
 
-Типовые причины:
-
-- hostname не совпадает с сертификатом  
-  Пример: сертификат на `gw10000.example.com`, а клиент подключается к IP или другому домену.
-- попытка подключиться к backend напрямую (`ws://...:10000`/`20000`) вместо `wss://...` через proxy
-- использование `0.0.0.0` в клиентском URL
-- DNS еще не обновился, и домен не указывает на этот сервер
-- порт `443` закрыт firewall/NAT
-- `ALLOW_IPS` не содержит ваш текущий IP, поэтому proxy отдает `403`
-
-## Локальный тест на macOS (до деплоя на Orange Pi)
-
-Добавлены отдельные файлы:
-
-- `docker-compose.test.yml`
-- `Caddyfile.test`
-- `test.local.env`
-- `scripts/generate-test-certs.sh`
-- `scripts/trust-test-cert-macos.sh`
-
-Шаги:
+Вместо `YYYY` подставьте идентификатор устройства:
 
 ```bash
-# 1) Сгенерировать локальные сертификаты
-./scripts/generate-test-certs.sh
-
-# 2) (опционально) добавить сертификат в доверенные на macOS
-./scripts/trust-test-cert-macos.sh
-
-# 3) Поднять локальный тестовый стек
-docker compose -f docker-compose.test.yml --env-file test.local.env up -d
-
-# 4) Проверить TLS и WSS endpoints
-curl -vk https://gw10000.localhost:8443
-curl -vk https://gw20000.localhost:8443
+docker exec -it openclaw-openclaw-gateway-1 node dist/index.js devices approve YYYY
 ```
 
-Если видите `HTTP/2 403 Forbidden`, TLS уже работает, а блокирует только IP allowlist.
-Для локального теста в `test.local.env` стоит `ALLOW_IPS=0.0.0.0/0 ::/0`.
+## Краткий порядок выполнения
 
-Проверка, что backend не опубликован:
-
-```bash
-docker compose -f docker-compose.test.yml --env-file test.local.env ps
-lsof -nP -iTCP -sTCP:LISTEN | grep -E ':(10000|20000|443|80)\b'
-```
-
-Ожидаемо: только `127.0.0.1:8080` и `127.0.0.1:8443`, без `10000/20000`.
+1. `ssh opi`
+2. `git clone https://github.com/openclaw/openclaw.git`
+3. `OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw ./docker-setup.sh`
+4. С локальной машины: `ssh -J vps opi -L 18789:127.0.0.1:18789`
+5. `docker exec ... devices list`
+6. `docker exec ... pairing approve telegram XXXX`
+7. `docker exec ... devices approve YYYY`
