@@ -148,8 +148,8 @@ sudo ufw limit 443/tcp
 docker compose -f docker-compose.test.yml --env-file test.local.env up -d
 
 # 4) Проверить TLS и WSS endpoints
-curl -vk https://gw10000.localhost
-curl -vk https://gw20000.localhost
+curl -vk https://gw10000.localhost:8443
+curl -vk https://gw20000.localhost:8443
 ```
 
 Проверка, что backend не опубликован:
@@ -159,4 +159,4 @@ docker compose -f docker-compose.test.yml --env-file test.local.env ps
 lsof -nP -iTCP -sTCP:LISTEN | grep -E ':(10000|20000|443|80)\b'
 ```
 
-Ожидаемо: только `127.0.0.1:80` и `127.0.0.1:443`, без `10000/20000`.
+Ожидаемо: только `127.0.0.1:8080` и `127.0.0.1:8443`, без `10000/20000`.

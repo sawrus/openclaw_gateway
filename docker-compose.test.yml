@@ -6,8 +6,8 @@ services:
     container_name: openclaw-reverse-proxy-test
     restart: unless-stopped
     ports:
-      - "127.0.0.1:80:80"
-      - "127.0.0.1:443:443"
+      - "127.0.0.1:${TEST_HTTP_PORT:-8080}:80"
+      - "127.0.0.1:${TEST_HTTPS_PORT:-8443}:443"
     environment:
       DOMAIN_GW10000: ${DOMAIN_GW10000:?DOMAIN_GW10000 is required}
       DOMAIN_GW20000: ${DOMAIN_GW20000:?DOMAIN_GW20000 is required}
