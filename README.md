@@ -152,6 +152,9 @@ curl -vk https://gw10000.localhost:8443
 curl -vk https://gw20000.localhost:8443
 ```
 
+Если видите `HTTP/2 403 Forbidden`, TLS уже работает, а блокирует только IP allowlist.
+Для локального теста в `test.local.env` стоит `ALLOW_IPS=0.0.0.0/0 ::/0`.
+
 Проверка, что backend не опубликован:
 
 ```bash
