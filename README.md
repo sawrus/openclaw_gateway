@@ -124,3 +124,39 @@ sudo ufw limit 443/tcp
 - DNS еще не обновился, и домен не указывает на этот сервер
 - порт `443` закрыт firewall/NAT
 - `ALLOW_IPS` не содержит ваш текущий IP, поэтому proxy отдает `403`
+
+## Локальный тест на macOS (до деплоя на Orange Pi)
+
+Добавлены отдельные файлы:
+
+- `docker-compose.test.yml`
+- `Caddyfile.test`
+- `test.local.env`
+- `scripts/generate-test-certs.sh`
+- `scripts/trust-test-cert-macos.sh`
+
+Шаги:
+
+```bash
+# 1) Сгенерировать локальные сертификаты
+./scripts/generate-test-certs.sh
+
+# 2) (опционально) добавить сертификат в доверенные на macOS
+./scripts/trust-test-cert-macos.sh
+
+# 3) Поднять локальный тестовый стек
+docker compose -f docker-compose.test.yml --env-file test.local.env up -d
+
+# 4) Проверить TLS и WSS endpoints
+curl -vk https://gw10000.localhost
+curl -vk https://gw20000.localhost
+```
+
+Проверка, что backend не опубликован:
+
+```bash
+docker compose -f docker-compose.test.yml --env-file test.local.env ps
+lsof -nP -iTCP -sTCP:LISTEN | grep -E ':(10000|20000|443|80)\b'
+```
+
+Ожидаемо: только `127.0.0.1:80` и `127.0.0.1:443`, без `10000/20000`.
