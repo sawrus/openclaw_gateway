@@ -3,6 +3,7 @@ SHELL := /bin/bash
 DOCKER_IMAGE ?= ghcr.io/openclaw/openclaw
 DOCKER_TAG ?= latest
 DOCKER_PLATFORM ?= linux/amd64
+COMPOSE_ENV_FILE ?= test.env
 PLATFORMS ?= linux/amd64,linux/arm64
 OPENCLAW_GATEWAY_VERSION ?= v1.0.0
 RELEASE_BASE_URL ?= https://github.com/openclaw/openclaw-gateway/releases/download
@@ -36,10 +37,10 @@ push: buildx-init
 		.
 
 pull:
-	DOCKER_IMAGE=$(DOCKER_IMAGE) DOCKER_TAG=$(DOCKER_TAG) DOCKER_PLATFORM=$(DOCKER_PLATFORM) docker compose pull
+	DOCKER_IMAGE=$(DOCKER_IMAGE) DOCKER_TAG=$(DOCKER_TAG) DOCKER_PLATFORM=$(DOCKER_PLATFORM) docker compose --env-file $(COMPOSE_ENV_FILE) pull
 
 up:
-	DOCKER_IMAGE=$(DOCKER_IMAGE) DOCKER_TAG=$(DOCKER_TAG) DOCKER_PLATFORM=$(DOCKER_PLATFORM) docker compose up -d
+	DOCKER_IMAGE=$(DOCKER_IMAGE) DOCKER_TAG=$(DOCKER_TAG) DOCKER_PLATFORM=$(DOCKER_PLATFORM) docker compose --env-file $(COMPOSE_ENV_FILE) up -d
 
 down:
 	docker compose down

@@ -1,101 +1,126 @@
-# OpenClaw Gateway Docker (Orange Pi)
+# OpenClaw Gateway через WSS (TLS) без публикации backend-портов
 
-Готовый шаблон для:
-- multi-arch сборки образа (`linux/amd64`, `linux/arm64`);
-- запуска **двух контейнеров** OpenClaw Gateway на портах `10000` и `20000`;
-- локального теста через `docker compose` на платформе `linux/amd64`.
+Реализован вариант A (предпочтительный): отдельные сабдомены под каждый gateway.
 
-## Что в репозитории
+- `wss://gw10000.example.com` -> `gateway-10000:18789` (внутри Docker-сети)
+- `wss://gw20000.example.com` -> `gateway-20000:18789` (внутри Docker-сети)
 
-- `Dockerfile` — образ, который скачивает бинарник стабильной версии OpenClaw Gateway из GitHub Releases.
-- `docker-compose.yml` — запуск двух экземпляров сервиса.
-- `Makefile` — команды для сборки, публикации и запуска.
+В интернет публикуется только reverse-proxy (`80/443`). Порты backend `10000/20000` не публикуются вообще.
 
-## 1) Подготовка Docker Buildx
+## Файлы
 
-```bash
-make buildx-init
-```
+- `docker-compose.yml` - два gateway + Caddy reverse proxy
+- `Caddyfile` - TLS (Let's Encrypt), WSS proxy, IP allowlist
 
-## 2) Сборка multi-arch локально
+## 1) Подготовка переменных (обязательно)
 
-> Локальная загрузка через `--load` обычно работает для одной платформы. Для multi-arch используйте `make push`.
+Создайте `.env` рядом с `docker-compose.yml`:
 
 ```bash
-make build \
-  DOCKER_IMAGE=docker.io/<your_user>/openclaw-gateway \
-  DOCKER_TAG=v1.0.0 \
-  OPENCLAW_GATEWAY_VERSION=v1.0.0
+cat > .env <<'EOF'
+DOCKER_IMAGE=ghcr.io/openclaw/openclaw
+DOCKER_TAG=latest
+DOCKER_PLATFORM=linux/amd64
+
+ACME_EMAIL=admin@example.com
+ACME_CA=https://acme-v02.api.letsencrypt.org/directory
+DOMAIN_GW10000=gw10000.example.com
+DOMAIN_GW20000=gw20000.example.com
+
+# Один IP или CIDR, например: 203.0.113.10/32
+ALLOW_IPS=203.0.113.10/32
+
+# ОБЯЗАТЕЛЬНО: сильный токен
+OPENCLAW_GATEWAY_TOKEN=REPLACE_ME
+EOF
 ```
 
-## 3) Публикация multi-arch в registry
+`ACME_EMAIL` должен быть реальным адресом (не `example.com`), иначе CA отклонит регистрацию ACME account.
 
-Перед этим войдите в нужный registry:
+Сгенерировать безопасный токен:
 
 ```bash
-docker login
+openssl rand -hex 32
 ```
 
-Публикация:
+Вставьте результат в `OPENCLAW_GATEWAY_TOKEN`. Пустое значение не пройдет: compose остановится с ошибкой.
+
+## 2) DNS
+
+Нужны записи:
+
+- `A` (и/или `AAAA`) для `gw10000.example.com` -> публичный IP вашего хоста
+- `A` (и/или `AAAA`) для `gw20000.example.com` -> публичный IP вашего хоста
+
+Важно: домены должны уже резолвиться на сервер до первого старта Caddy, иначе Let's Encrypt не выдаст сертификат.
+
+## 3) Запуск
 
 ```bash
-make push \
-  DOCKER_IMAGE=ghcr.io/openclaw/openclaw \
-  DOCKER_TAG=latest \
-  OPENCLAW_GATEWAY_VERSION=v1.0.0
+docker compose up -d
+docker compose ps
 ```
 
-Команда эквивалентна вашему примеру `docker buildx build --platform linux/amd64,linux/arm64 ... --push`.
-
-## 4) Запуск 2 контейнеров (10000 и 20000)
+Проверка TLS handshake:
 
 ```bash
-make pull DOCKER_PLATFORM=linux/amd64
-
-make up \
-  DOCKER_PLATFORM=linux/amd64
+curl -vk https://gw10000.example.com
+curl -vk https://gw20000.example.com
 ```
 
-Проверка:
+## 4) Подключение клиента
+
+Используйте только доменные WSS URL:
+
+- `wss://gw10000.example.com`
+- `wss://gw20000.example.com`
+
+Не используйте `0.0.0.0` в URL.
+
+## 5) Проверка, что backend не торчит в интернет
+
+На сервере:
 
 ```bash
-make ps
+docker compose ps
+ss -tulpen | grep -E '(:10000|:20000|:443|:80)\b'
 ```
 
-Логи:
+Ожидаемо: слушают только `:80` и `:443` (reverse proxy). Портов `10000/20000` на хосте быть не должно.
+
+Из внешней сети (другой хост/интернет):
 
 ```bash
-make logs
+nc -vz <your_server_ip> 10000
+nc -vz <your_server_ip> 20000
 ```
 
-Остановка:
+Ожидаемо: `failed`/`timed out`.
+
+## 6) Ограничение доступа и anti-abuse
+
+Уже включено в `Caddyfile`:
+
+- IP allowlist через `remote_ip` matcher (`ALLOW_IPS`)
+
+По rate limit:
+
+- в стандартном Caddy нет встроенного rate-limit без доп. модуля;
+- для простого копипаста рекомендуется держать allowlist + firewall/cloud edge rate limit.
+- пример на хосте с UFW:
 
 ```bash
-make down
+sudo ufw limit 443/tcp
 ```
 
-## Образ и версия по умолчанию
+## 7) Troubleshooting TLS error
 
-- По умолчанию используется образ `ghcr.io/openclaw/openclaw:latest` (`DOCKER_IMAGE` + `DOCKER_TAG` из `Makefile`).
-- При необходимости можно передать другой `DOCKER_TAG` или `DOCKER_IMAGE` в `make up`/`make pull`.
+Типовые причины:
 
-## Примечания по платформе
-
-- Для локального запуска и теста используйте только `DOCKER_PLATFORM=linux/amd64`.
-- В `docker-compose.yml` платформа берется из переменной `DOCKER_PLATFORM`.
-- Для buildx-сборки `make push` сохраняется multi-arch (`linux/amd64,linux/arm64`).
-
-## Git workflow (отдельная ветка)
-
-Работайте в отдельной ветке:
-
-```bash
-git checkout -b feature/docker-orange-pi-deploy
-```
-
-Далее:
-
-```bash
-git add Dockerfile docker-compose.yml Makefile README.md
-git commit -m "Add multi-arch Docker and compose setup for Orange Pi deployment"
-```
+- hostname не совпадает с сертификатом  
+  Пример: сертификат на `gw10000.example.com`, а клиент подключается к IP или другому домену.
+- попытка подключиться к backend напрямую (`ws://...:10000`/`20000`) вместо `wss://...` через proxy
+- использование `0.0.0.0` в клиентском URL
+- DNS еще не обновился, и домен не указывает на этот сервер
+- порт `443` закрыт firewall/NAT
+- `ALLOW_IPS` не содержит ваш текущий IP, поэтому proxy отдает `403`

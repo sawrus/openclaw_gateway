@@ -1,6 +1,29 @@
 version: "3.9"
 
 services:
+  reverse-proxy:
+    image: caddy:2.10.2-alpine
+    container_name: openclaw-reverse-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+      DOMAIN_GW10000: ${DOMAIN_GW10000:?DOMAIN_GW10000 is required}
+      DOMAIN_GW20000: ${DOMAIN_GW20000:?DOMAIN_GW20000 is required}
+      ALLOW_IPS: ${ALLOW_IPS:?ALLOW_IPS is required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - gateway_net
+    depends_on:
+      - gateway-10000
+      - gateway-20000
+
   gateway-10000:
     image: ${DOCKER_IMAGE:-ghcr.io/openclaw/openclaw}:${DOCKER_TAG:-latest}
     platform: ${DOCKER_PLATFORM:-linux/amd64}
@@ -8,10 +31,13 @@ services:
     restart: unless-stopped
     environment:
       GATEWAY_HOST: 0.0.0.0
-      GATEWAY_PORT: 8080
+      GATEWAY_PORT: 18789
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?OPENCLAW_GATEWAY_TOKEN is required}
       OPENCLAW_INSTANCE: gateway-10000
-    ports:
-      - "10000:8080"
+    expose:
+      - "18789"
+    networks:
+      - gateway_net
 
   gateway-20000:
     image: ${DOCKER_IMAGE:-ghcr.io/openclaw/openclaw}:${DOCKER_TAG:-latest}
@@ -20,7 +46,18 @@ services:
     restart: unless-stopped
     environment:
       GATEWAY_HOST: 0.0.0.0
-      GATEWAY_PORT: 8080
+      GATEWAY_PORT: 18789
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?OPENCLAW_GATEWAY_TOKEN is required}
       OPENCLAW_INSTANCE: gateway-20000
-    ports:
-      - "20000:8080"
+    expose:
+      - "18789"
+    networks:
+      - gateway_net
+
+networks:
+  gateway_net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

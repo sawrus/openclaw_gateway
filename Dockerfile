@@ -19,9 +19,9 @@ RUN apk add --no-cache ca-certificates curl && \
     chmod +x /usr/local/bin/${BINARY_NAME}
 
 ENV GATEWAY_HOST=0.0.0.0 \
-    GATEWAY_PORT=8080
+    GATEWAY_PORT=18789
 
-EXPOSE 8080
+EXPOSE 18789
 
 ENTRYPOINT ["/usr/local/bin/openclaw-gateway"]
-CMD ["serve", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["serve", "--host", "0.0.0.0", "--port", "18789"]
